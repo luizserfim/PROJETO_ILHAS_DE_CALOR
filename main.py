@@ -2,10 +2,70 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Configuração da página da Plataforma
-st.set_page_config(page_title="Simulador de Ilhas de Calor - Baturité", layout="wide")
+st.set_page_config(
+    page_title="Simulador de Ilhas de Calor",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("🌡️ Plataforma de Simulação Térmica Urbana — Baturité/CE")
+# ==========================
+# CSS PERSONALIZADO
+# ==========================
+
+st.markdown("""
+<style>
+
+.main{
+    background-color:#f4f8f7;
+}
+
+h1{
+    color:#1565C0;
+    font-weight:700;
+}
+
+h2,h3{
+    color:#2E7D32;
+}
+
+div[data-testid="stMetric"]{
+    background:white;
+    border-radius:15px;
+    padding:20px;
+    box-shadow:0px 4px 10px rgba(0,0,0,0.10);
+    border-left:6px solid #2E7D32;
+}
+
+section[data-testid="stSidebar"]{
+    background:#E8F5E9;
+}
+
+footer{
+    visibility:hidden;
+}
+
+header{
+    visibility:hidden;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================
+# CABEÇALHO
+# ==========================
+
+st.markdown("""
+# 🌍 Simulador de Ilhas de Calor Urbanas
+
+### Município de Baturité - Ceará
+
+Sistema de apoio à análise térmica urbana baseado
+na cobertura do solo e temperatura observada.
+
+---
+""")
 st.markdown("Ajuste os parâmetros dos bairros para prever a temperatura e simular cenários de arborização.")
 
 # --- BARRA LATERAL: ENTRADA DE DADOS DO USUÁRIO (Etapas 6, 7 e 9) ---
