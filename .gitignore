@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Editores / IDEs
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Variáveis de ambiente / credenciais
+.env
+.env.*
+!.env.example
+
+# Cache e arquivos temporários
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.tmp
+*.temp
+*.log
+
+# Cobertura de testes
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Documentação e arquivos-base locais
+Documentacao/
