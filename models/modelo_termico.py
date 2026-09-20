@@ -1,8 +1,29 @@
+from math import isfinite
+from numbers import Real
+from collections.abc import Mapping
+
 from config.model_config import (
     PESOS_TERMICOS,
     DELTA_T_MIN,
     DELTA_T_MAX,
 )
+
+
+def validar_numero(valor, nome, minimo=None, maximo=None):
+    """Rejeita booleanos, strings, NaN e infinitos nas fronteiras do modelo."""
+    if isinstance(valor, bool) or not isinstance(valor, Real):
+        raise ValueError(f"{nome} deve ser um número real finito.")
+    try:
+        finito = isfinite(valor)
+    except OverflowError:
+        finito = False
+    if not finito:
+        raise ValueError(f"{nome} deve ser um número real finito.")
+    if minimo is not None and valor < minimo:
+        raise ValueError(f"{nome} deve ser maior ou igual a {minimo}.")
+    if maximo is not None and valor > maximo:
+        raise ValueError(f"{nome} deve ser menor ou igual a {maximo}.")
+    return valor
 
 
 def validar_cobertura(
@@ -13,6 +34,7 @@ def validar_cobertura(
     agua,
     tolerancia=0.01,
 ):
+    validar_numero(tolerancia, "Tolerância", 0, 0.01)
     coberturas = {
         "vegetacao": vegetacao,
         "pavimento": pavimento,
@@ -22,10 +44,7 @@ def validar_cobertura(
     }
 
     for nome, valor in coberturas.items():
-        if not 0 <= valor <= 100:
-            raise ValueError(
-                f"A cobertura '{nome}' deve estar entre 0 e 100%."
-            )
+        validar_numero(valor, nome, 0, 100)
 
     total = sum(coberturas.values())
 
@@ -46,9 +65,14 @@ def calcular_indice_termico(
     agua,
     pesos=None,
 ):
+    validar_cobertura(vegetacao, pavimento, edificacoes, solo_exposto, agua)
     if pesos is None:
         pesos = PESOS_TERMICOS
 
+    if not isinstance(pesos, Mapping) or set(pesos) != set(PESOS_TERMICOS):
+        raise ValueError("Os pesos devem conter exatamente as cinco coberturas.")
+    for nome, peso in pesos.items():
+        validar_numero(peso, f"Peso de {nome}", -1, 1)
     return (
         pesos["vegetacao"] * vegetacao
         + pesos["pavimento"] * pavimento
@@ -59,6 +83,7 @@ def calcular_indice_termico(
 
 
 def calcular_anomalia_termica(indice_termico):
+    validar_numero(indice_termico, "Índice térmico")
     delta_t = indice_termico * 10
     return max(DELTA_T_MIN, min(DELTA_T_MAX, delta_t))
 
@@ -71,6 +96,7 @@ def estimar_temperatura(
     solo_exposto,
     agua,
 ):
+    validar_numero(temperatura_referencia, "Temperatura de referência", -90, 60)
     validar_cobertura(
         vegetacao,
         pavimento,
@@ -111,8 +137,8 @@ def comparar_intervencao(
     Compara o cenário atual com uma intervenção que converte
     determinada cobertura em vegetação.
     """
-    if percentual_convertido < 0:
-        raise ValueError("O percentual convertido não pode ser negativo.")
+    validar_numero(percentual_convertido, "Percentual convertido", 0, 100)
+    validar_cobertura(vegetacao, pavimento, edificacoes, solo_exposto, agua)
 
     coberturas = {
         "vegetacao": vegetacao,
@@ -128,7 +154,7 @@ def comparar_intervencao(
         "Edificações → Vegetação": "edificacoes",
     }
 
-    if tipo_intervencao not in origens:
+    if not isinstance(tipo_intervencao, str) or tipo_intervencao not in origens:
         raise ValueError("Tipo de intervenção não reconhecido.")
 
     origem = origens[tipo_intervencao]

@@ -1,7 +1,7 @@
 import streamlit as st
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
-from services.funceme import obter_temperatura_atual
+from services.funceme import ErroFunceme, obter_temperatura_atual
 from models.modelo_termico import estimar_temperatura, comparar_intervencao
 from components.styles import aplicar_estilos
 
@@ -145,9 +145,9 @@ with aba3:
 
     bairro_selecionado = st.sidebar.text_input(
         "Nome da região ou local:",
-        value="",
         placeholder="Ex.: Centro, bairro, praça ou comunidade",
         key="nome_regiao",
+        max_chars=100,
     )
 
     st.sidebar.caption(
@@ -163,31 +163,31 @@ with aba3:
     )
 
     vegetacao = st.sidebar.slider(
-        "🌳 Vegetação (%)", 0, 100, 15, 1,
+        "🌳 Vegetação (%)", min_value=0, max_value=100, step=1,
         help="Árvores, gramados, jardins e outras áreas verdes.",
         key="vegetacao",
     )
 
     pavimento = st.sidebar.slider(
-        "🛣️ Pavimento (%)", 0, 100, 40, 1,
+        "🛣️ Pavimento (%)", min_value=0, max_value=100, step=1,
         help="Ruas, asfalto, calçadas, concreto e outras superfícies pavimentadas.",
         key="pavimento",
     )
 
     edificacoes = st.sidebar.slider(
-        "🏢 Edificações (%)", 0, 100, 35, 1,
+        "🏢 Edificações (%)", min_value=0, max_value=100, step=1,
         help="Casas, prédios e demais áreas ocupadas por construções.",
         key="edificacoes",
     )
 
     solo_exposto = st.sidebar.slider(
-        "🟫 Solo exposto (%)", 0, 100, 5, 1,
+        "🟫 Solo exposto (%)", min_value=0, max_value=100, step=1,
         help="Terrenos ou superfícies de solo sem cobertura vegetal.",
         key="solo_exposto",
     )
 
     agua = st.sidebar.slider(
-        "💧 Água (%)", 0, 100, 5, 1,
+        "💧 Água (%)", min_value=0, max_value=100, step=1,
         help="Rios, açudes, lagos e outras superfícies de água.",
         key="agua",
     )
@@ -215,18 +215,24 @@ with aba3:
     with col_salvar:
         salvar = st.button(
             "💾 Salvar",
-            use_container_width=True,
-            disabled=not cobertura_valida,
+            width="stretch",
+            disabled=not cobertura_valida or len(st.session_state.cenarios_salvos) >= 50,
         )
 
     with col_novo:
         st.button(
             "➕ Nova análise",
-            use_container_width=True,
+            width="stretch",
             on_click=nova_analise,
         )
 
-    if salvar:
+    if len(st.session_state.cenarios_salvos) >= 50:
+        st.sidebar.info("Limite de 50 cenários por sessão atingido.")
+    if st.sidebar.button("Limpar cenários salvos"):
+        st.session_state.cenarios_salvos = []
+        st.rerun()
+
+    if salvar and cobertura_valida and len(st.session_state.cenarios_salvos) < 50:
         nome_salvo = bairro_selecionado.strip() or f"Cenário {len(st.session_state.cenarios_salvos) + 1}"
 
         st.session_state.cenarios_salvos.append(
@@ -239,15 +245,15 @@ with aba3:
                 "agua": agua,
             }
         )
-        st.sidebar.success(f"💾 '{nome_salvo}' salvo nesta sessão.")
+        st.sidebar.success("Cenário salvo nesta sessão.")
 
     if st.session_state.cenarios_salvos:
         with st.sidebar.expander(
             f"📁 Cenários salvos ({len(st.session_state.cenarios_salvos)})"
         ):
             for i, cenario in enumerate(st.session_state.cenarios_salvos, start=1):
-                st.markdown(
-                    f"**{i}. {cenario['regiao']}**  \\n"
+                st.text(
+                    f"{i}. {cenario['regiao']}\n"
                     f"Vegetação: {cenario['vegetacao']}% · "
                     f"Pavimento: {cenario['pavimento']}% · "
                     f"Edificações: {cenario['edificacoes']}% · "
@@ -257,12 +263,18 @@ with aba3:
 
     st.sidebar.markdown("### 🌡️ Dados meteorológicos")
 
-    @st.cache_data(ttl=600)
+    @st.cache_data(ttl=600, max_entries=1, show_spinner=False)
     def carregar_dados_funceme():
-        return obter_temperatura_atual()
+        # Falhas também são cacheadas para evitar repetição a cada slider.
+        try:
+            return obter_temperatura_atual()
+        except ErroFunceme:
+            return None
 
     try:
         dados_funceme = carregar_dados_funceme()
+        if dados_funceme is None:
+            raise ErroFunceme("Fonte indisponível.")
         temp_referencia = float(dados_funceme["temperatura_media"])
         temp_maxima = float(dados_funceme["temperatura_maxima"])
         temp_minima = float(dados_funceme["temperatura_minima"])
@@ -279,7 +291,7 @@ with aba3:
             f"{horario_observacao.strftime('%d/%m/%Y às %H:%M')}"
         )
 
-    except Exception:
+    except ErroFunceme:
         dados_funceme = None
         fonte_temperatura = "Entrada manual"
         st.sidebar.warning(
@@ -287,8 +299,8 @@ with aba3:
         )
         temp_referencia = st.sidebar.number_input(
             "Temperatura de referência (°C)",
-            min_value=0.0,
-            max_value=50.0,
+            min_value=-90.0,
+            max_value=60.0,
             value=30.0,
             step=0.1,
         )
@@ -309,7 +321,8 @@ with aba3:
         except ValueError as erro:
             st.error(f"Erro no modelo: {erro}")
 
-    st.subheader(f"📊 Cenário analisado: {bairro_selecionado}")
+    st.subheader("📊 Cenário analisado")
+    st.text(bairro_selecionado)
 
     if resultado is not None:
         indice_termico = resultado["indice_termico"]
@@ -354,12 +367,16 @@ with aba3:
     area_disponivel = origens[tipo_intervencao]
     limite_intervencao = min(50, area_disponivel, 100 - vegetacao)
 
-    percentual_convertido = st.slider(
-        "Área convertida em vegetação (pontos percentuais)",
-        min_value=0,
-        max_value=limite_intervencao,
-        value=min(10, limite_intervencao),
-    )
+    if limite_intervencao > 0:
+        percentual_convertido = st.slider(
+            "Área convertida em vegetação (pontos percentuais)",
+            min_value=0,
+            max_value=limite_intervencao,
+            value=min(10, limite_intervencao),
+        )
+    else:
+        percentual_convertido = 0
+        st.info("Não há área disponível para esta intervenção.")
 
     comparacao = None
 
@@ -423,7 +440,7 @@ with aba3:
         st.dataframe(
             tabela_cobertura,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     st.divider()
@@ -447,7 +464,8 @@ with aba3:
                 "Após intervenção",
             ]
 
-            fig1, ax1 = plt.subplots(figsize=(7, 4))
+            fig1 = Figure(figsize=(7, 4))
+            ax1 = fig1.subplots()
             barras = ax1.bar(
                 categorias_temperatura,
                 valores_temperatura,
@@ -477,7 +495,6 @@ with aba3:
 
             fig1.tight_layout()
             st.pyplot(fig1)
-            plt.close(fig1)
 
         with col_grafico2:
             st.markdown("#### Cobertura do solo")
@@ -509,7 +526,8 @@ with aba3:
             posicoes = list(range(len(classes)))
             largura = 0.38
 
-            fig2, ax2 = plt.subplots(figsize=(7, 4))
+            fig2 = Figure(figsize=(7, 4))
+            ax2 = fig2.subplots()
 
             ax2.bar(
                 [x - largura / 2 for x in posicoes],
@@ -533,7 +551,6 @@ with aba3:
 
             fig2.tight_layout()
             st.pyplot(fig2)
-            plt.close(fig2)
 
     else:
         st.info(
@@ -590,10 +607,7 @@ with aba4:
     )
 
     st.subheader("Validação computacional")
-    st.success(
-        "O modelo foi submetido a 10 testes computacionais, "
-        "todos executados com sucesso."
-    )
+    st.info("O projeto inclui testes automatizados do modelo, da integração meteorológica e da interface. Consulte o README para executá-los.")
 
     st.write(
         """
